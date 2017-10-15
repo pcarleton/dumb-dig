@@ -1,0 +1,6 @@
+[package]
+name = "rdns"
+version = "0.1.0"
+authors = ["Paul Carleton <paulcarletonjr@gmail.com>"]
+
+[dependencies]
