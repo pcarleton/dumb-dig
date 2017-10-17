@@ -1,6 +1,7 @@
 
 use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 
+#[derive(Debug)]
 struct DnsHeader {
     id: u16,
 
@@ -34,6 +35,10 @@ fn write_u16(a: u16, buf: &mut [u8], idx: usize ) -> usize {
 
 fn read_u16(buf: &[u8]) -> u16 {
     return ((buf[0] as u16) << 8) | (buf[1] as u16);
+}
+
+fn read_bit(byte: u8, bitnum: u8) -> bool {
+    return (byte & (1 << bitnum)) != 0;
 }
 
 fn on_bit(a: bool) -> u8 {
@@ -84,11 +89,25 @@ impl DnsHeader {
         return buf;
     }
 
-    //fn from_bytes(bytes: [u8; 12]) -> DnsHeader {
-    //    return DnsHeader{
-    //        id: 1234
-    //    }
-    //}
+    fn from_bytes(bytes: &[u8]) -> DnsHeader {
+        return DnsHeader{
+            id: read_u16(&bytes),
+            qr: read_bit(bytes[2], 7),
+            opcode: (bytes[2] >> 3) & 0b1111,
+            aa: read_bit(bytes[2], 2),
+            tc: read_bit(bytes[2], 1),
+            rd: read_bit(bytes[2], 0),
+
+            ra: read_bit(bytes[3], 7),
+            z: (bytes[3] >> 4) & 0b111,
+            rcode: (bytes[3] & 0b1111),
+
+            qdcount: read_u16(&bytes[4..6]),
+            ancount: read_u16(&bytes[6..8]),
+            nscount: read_u16(&bytes[8..10]),
+            arcount: read_u16(&bytes[10..12]),
+        }
+    }
 }
 
 
@@ -178,7 +197,7 @@ fn foo() -> std::io::Result<()> {
         opcode: 0,
         aa: false,
         tc: false,
-        rd: false,
+        rd: true,
         ra: false,
         z: 0,
         rcode: 0,
@@ -210,6 +229,10 @@ fn foo() -> std::io::Result<()> {
 
     println!("Amt is {0}", amt);
     println!("Buf: {0}", String::from_utf8_lossy(&buf2));
+
+    let new_header = DnsHeader::from_bytes(&buf2);
+    println!("Header: {:?}", new_header);
+    
 Ok(())
 } // the socket is closed here
 }
