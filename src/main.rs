@@ -21,6 +21,37 @@ struct DnsHeader {
     arcount: u16,
 }
 
+#[derive(Debug)]
+struct DnsQuestion<'a> {
+    qname: &'a str,
+    qtype: u16,
+    qclass: u16,
+}
+
+
+impl<'a> DnsQuestion<'a> {
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut arr :Vec<u8> = vec![0; self.qname.len()+ 6];
+        let mut arr_idx = 0;
+
+        for piece in self.qname.split(".") {
+            arr[arr_idx] = piece.len() as u8;
+            arr_idx += 1;
+            arr[arr_idx .. arr_idx + piece.len()].clone_from_slice(piece.as_bytes());
+            arr_idx += piece.len();
+        }
+        // Write null terminating byte
+        arr_idx += 1;
+
+        write_u16(self.qtype, &mut arr[arr_idx..arr_idx+2], 0);
+        arr_idx += 2;
+        write_u16(self.qclass, &mut arr[arr_idx..arr_idx+2], 0);
+
+        return arr
+    }
+}
+
 
 fn write_u8(a: u8, buf: &mut [u8], idx: usize) -> usize {
     buf[idx] = a;
@@ -206,13 +237,19 @@ fn foo() -> std::io::Result<()> {
         nscount: 0,
         arcount: 0
     };
-    let buf = make_packet();
-
+    
+    let question = DnsQuestion{
+        qname: "google.com",
+        qtype: 1,
+        qclass: 1,
+    };
     let mut to_send = [0; 28];
 
     let head_bytes = header.to_bytes();
+    let question_bytes = question.to_bytes();
+    
     to_send[..12].clone_from_slice(&head_bytes);
-    to_send[12..].clone_from_slice(&buf[12..]);
+    to_send[12..].clone_from_slice(&question_bytes);
 
     socket.send_to(&to_send, connection)?;
     println!("Sent! {0}", String::from_utf8_lossy(&to_send));
