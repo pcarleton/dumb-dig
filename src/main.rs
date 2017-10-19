@@ -74,6 +74,7 @@ impl<'a> BinDecoder<'a> {
     fn read_vec(&mut self, len: usize) -> DnsResult<Vec<u8>> {
         self.check_size(len)?;
         let vec :Vec<u8> = self.buffer[self.index..self.index+len].to_vec();
+        self.index += len;
         Ok(vec)
     }
 
@@ -127,8 +128,12 @@ impl DnsQuestion {
         let mut label_vec :Vec<String> = vec![];
 
         while decoder.peek()? != 0 {
-            label_vec.push(decoder.read_char_data()?);
+            let label = decoder.read_char_data()?;
+            println!("Found label: {}", label);
+            label_vec.push(label);
         }
+
+        println!("Read all labels");
 
         let qname = label_vec.join(".");
 
@@ -302,7 +307,7 @@ fn foo() -> std::io::Result<()> {
     println!("Sent! {0}", String::from_utf8_lossy(&to_send));
 
     // read from the socket
-    let mut buf2 = [0; 50];
+    let mut buf2 = [0; 100];
     let (amt, _) = socket.recv_from(&mut buf2)?;
 
     println!("Amt is {0}", amt);
@@ -313,6 +318,12 @@ fn foo() -> std::io::Result<()> {
     let new_header = DnsHeader::decode(&mut decoder);
     match new_header {
         Ok(h) => println!("Header: {:?}", h),
+        Err(err) => println!("Decoding err: {}", err.msg),
+    }
+    
+    let resp_question = DnsQuestion::decode(&mut decoder);
+    match resp_question {
+        Ok(q) => println!("Question: {:?}", q),
         Err(err) => println!("Decoding err: {}", err.msg),
     }
     
