@@ -21,6 +21,67 @@ struct DnsHeader {
     arcount: u16,
 }
 
+struct DnsError {
+    msg: String
+}
+type DnsResult<T> = Result<T, DnsError>;
+
+// Inspired by TRustDNS encoder/decoder
+struct BinDecoder<'a> {
+    buffer: &'a [u8],
+    index: usize,
+}
+
+impl<'a> BinDecoder<'a> {
+    
+    fn new(buf: &'a [u8]) -> Self {
+        BinDecoder{
+            buffer: buf,
+            index: 0
+        }
+    }
+
+    fn pop(&mut self) -> DnsResult<u8> {
+        self.check_size(1)?;
+        let byte = self.buffer[self.index];
+        self.index += 1;
+        Ok(byte)
+    }
+
+    fn check_size(&self, req: usize) -> DnsResult<()> {
+        if (self.index + req) > self.buffer.len() {
+            Err::<(), DnsError>(DnsError{msg: "End of buffer".to_string()});
+        }
+        Ok(())
+    }
+
+    fn read_u16(&mut self) -> DnsResult<u16> {
+        let b1 = self.pop()?;
+        let b2 = self.pop()?;
+        
+        Ok(((b1 as u16) << 8) + (b2 as u16))
+    }
+
+
+    fn read_vec(&mut self, len: usize) -> DnsResult<Vec<u8>> {
+        self.check_size(len)?;
+        let vec :Vec<u8> = self.buffer[self.index..self.index+len].to_vec();
+        Ok(vec)
+    }
+
+
+    fn read_char_data(&mut self) -> DnsResult<String> {
+        let length :u8 = self.pop()?;
+
+        let char_vec :Vec<u8> = self.read_vec(length as usize)?;
+
+        let data = String::from_utf8(char_vec);
+
+        Ok(data.unwrap())
+    }
+
+}
+
 #[derive(Debug)]
 struct DnsQuestion<'a> {
     qname: &'a str,
@@ -254,12 +315,6 @@ fn foo() -> std::io::Result<()> {
     socket.send_to(&to_send, connection)?;
     println!("Sent! {0}", String::from_utf8_lossy(&to_send));
 
-    use std::fs::File;
-    use std::io::prelude::*;
-
-    let mut file = File::create("dnsquery.txt")?;
-    file.write_all(&buf)?;
-    
     // read from the socket
     let mut buf2 = [0; 50];
     let (amt, src) = socket.recv_from(&mut buf2)?;
