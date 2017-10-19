@@ -48,6 +48,12 @@ impl<'a> BinDecoder<'a> {
         self.index += 1;
         Ok(byte)
     }
+    
+    fn peek(&self) -> DnsResult<u8> {
+        self.check_size(1)?;
+        let byte = self.buffer[self.index];
+        Ok(byte)
+    }
 
     fn check_size(&self, req: usize) -> DnsResult<()> {
         if (self.index + req) > self.buffer.len() {
@@ -79,6 +85,9 @@ impl<'a> BinDecoder<'a> {
 
         let data = String::from_utf8(char_vec);
 
+        // Should probably do some kind of error chain thing here,
+        // since there's a String error that could happen that we
+        // would panic on.
         Ok(data.unwrap())
     }
 
@@ -86,7 +95,7 @@ impl<'a> BinDecoder<'a> {
 
 #[derive(Debug)]
 struct DnsQuestion<'a> {
-    qname: &'a str,
+    qname: String,
     qtype: u16,
     qclass: u16,
 }
@@ -112,6 +121,29 @@ impl<'a> DnsQuestion<'a> {
         write_u16(self.qclass, &mut arr[arr_idx..arr_idx+2], 0);
 
         return arr
+    }
+
+    fn decode(decoder: &mut BinDecoder) -> DnsResult<DnsQuestion<'a>> {
+        let mut label_vec :Vec<String> = vec![];
+
+        while decoder.peek()? != 0 {
+            label_vec.push(decoder.read_char_data()?);
+        }
+
+        let qname = label_vec.join(".");
+
+        // Read null byte
+        decoder.pop()?;
+
+        let qtype = decoder.read_u16()?;
+        let qclass = decoder.read_u16()?;
+
+        Ok(DnsQuestion{
+            qname: &qname,
+            qtype: qtype,
+            qclass: qclass
+        })
+
     }
 }
 
