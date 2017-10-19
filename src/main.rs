@@ -94,14 +94,14 @@ impl<'a> BinDecoder<'a> {
 }
 
 #[derive(Debug)]
-struct DnsQuestion<'a> {
+struct DnsQuestion {
     qname: String,
     qtype: u16,
     qclass: u16,
 }
 
 
-impl<'a> DnsQuestion<'a> {
+impl DnsQuestion {
 
     fn to_bytes(&self) -> Vec<u8> {
         let mut arr :Vec<u8> = vec![0; self.qname.len()+ 6];
@@ -123,7 +123,7 @@ impl<'a> DnsQuestion<'a> {
         return arr
     }
 
-    fn decode(decoder: &mut BinDecoder) -> DnsResult<DnsQuestion<'a>> {
+    fn decode(decoder: &mut BinDecoder) -> DnsResult<DnsQuestion> {
         let mut label_vec :Vec<String> = vec![];
 
         while decoder.peek()? != 0 {
@@ -139,7 +139,7 @@ impl<'a> DnsQuestion<'a> {
         let qclass = decoder.read_u16()?;
 
         Ok(DnsQuestion{
-            qname: &qname,
+            qname: qname,
             qtype: qtype,
             qclass: qclass
         })
@@ -286,7 +286,7 @@ fn foo() -> std::io::Result<()> {
     };
     
     let question = DnsQuestion{
-        qname: "google.com",
+        qname: "google.com".to_string(),
         qtype: 1,
         qclass: 1,
     };
