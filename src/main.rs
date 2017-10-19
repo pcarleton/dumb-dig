@@ -70,6 +70,13 @@ impl<'a> BinDecoder<'a> {
         Ok(((b1 as u16) << 8) + (b2 as u16))
     }
 
+    fn read_u32(&mut self) -> DnsResult<u32> {
+        let u1 = self.read_u16()?;
+        let u2 = self.read_u16()?;
+
+        Ok(((u1 as u32) << 16) + (u2 as u32))
+    }
+
 
     fn read_vec(&mut self, len: usize) -> DnsResult<Vec<u8>> {
         self.check_size(len)?;
@@ -129,11 +136,8 @@ impl DnsQuestion {
 
         while decoder.peek()? != 0 {
             let label = decoder.read_char_data()?;
-            println!("Found label: {}", label);
             label_vec.push(label);
         }
-
-        println!("Read all labels");
 
         let qname = label_vec.join(".");
 
@@ -149,6 +153,54 @@ impl DnsQuestion {
             qclass: qclass
         })
 
+    }
+}
+
+#[derive(Debug)]
+struct DnsResource {
+    name: String,
+    rtype: u16,
+    class: u16,
+    ttl: u32,
+    rdlength: u16,
+    rdata: Vec<u8>
+}
+
+impl DnsResource {
+    fn decode(decoder: &mut BinDecoder) -> DnsResult<DnsResource> {
+        let name :String;
+        if (decoder.peek()? & 0b1100_0000) == 0b1100_0000 {
+            
+            name = "POINTER".to_string();
+            // Pop the pointer off. TODO: actually read the pointer...
+            decoder.pop()?;
+            decoder.pop()?;
+        } else {
+          let mut label_vec :Vec<String> = vec![];
+
+          while decoder.peek()? != 0 {
+              let label = decoder.read_char_data()?;
+              label_vec.push(label);
+          }
+
+          name = label_vec.join("."); 
+        }
+
+        let rtype = decoder.read_u16()?;
+        let class = decoder.read_u16()?;
+        let ttl = decoder.read_u32()?;
+
+        let rdlength = decoder.read_u16()?;
+        let rdata = decoder.read_vec(rdlength as usize)?;
+
+        Ok(DnsResource{
+            name: name,
+            rtype: rtype,
+            class: class,
+            ttl: ttl,
+            rdlength: rdlength,
+            rdata: rdata,
+        })
     }
 }
 
@@ -324,6 +376,12 @@ fn foo() -> std::io::Result<()> {
     let resp_question = DnsQuestion::decode(&mut decoder);
     match resp_question {
         Ok(q) => println!("Question: {:?}", q),
+        Err(err) => println!("Decoding err: {}", err.msg),
+    }
+    
+    let resp_resource = DnsResource::decode(&mut decoder);
+    match resp_resource {
+        Ok(r) => println!("Resource: {:?}", r),
         Err(err) => println!("Decoding err: {}", err.msg),
     }
     
