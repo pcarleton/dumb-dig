@@ -21,6 +21,7 @@ struct DnsHeader {
     arcount: u16,
 }
 
+#[derive(Debug)]
 struct DnsError {
     msg: String
 }
@@ -50,9 +51,10 @@ impl<'a> BinDecoder<'a> {
 
     fn check_size(&self, req: usize) -> DnsResult<()> {
         if (self.index + req) > self.buffer.len() {
-            Err::<(), DnsError>(DnsError{msg: "End of buffer".to_string()});
+            Err::<(), DnsError>(DnsError{msg: "End of buffer".to_string()})
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn read_u16(&mut self) -> DnsResult<u16> {
@@ -125,14 +127,6 @@ fn write_u16(a: u16, buf: &mut [u8], idx: usize ) -> usize {
     return idx+2;
 }
 
-fn read_u16(buf: &[u8]) -> u16 {
-    return ((buf[0] as u16) << 8) | (buf[1] as u16);
-}
-
-fn read_bit(byte: u8, bitnum: u8) -> bool {
-    return (byte & (1 << bitnum)) != 0;
-}
-
 fn on_bit(a: bool) -> u8 {
     if a {
         return 1
@@ -195,7 +189,7 @@ impl DnsHeader {
 
         let ra = (0b1000_0000 & ra_z_rcode) == 0b1000_0000;
         let z = (0b0111_0000 & ra_z_rcode) >> 4;
-        let rcode = (0b0000_1111 & ra_z_rcode);
+        let rcode = 0b0000_1111 & ra_z_rcode;
 
         let qdcount = decoder.read_u16()?;
         let ancount = decoder.read_u16()?;
@@ -219,25 +213,6 @@ impl DnsHeader {
         })
     }
 
-    fn from_bytes(bytes: &[u8]) -> DnsHeader {
-        return DnsHeader{
-            id: read_u16(&bytes),
-            qr: read_bit(bytes[2], 7),
-            opcode: (bytes[2] >> 3) & 0b1111,
-            aa: read_bit(bytes[2], 2),
-            tc: read_bit(bytes[2], 1),
-            rd: read_bit(bytes[2], 0),
-
-            ra: read_bit(bytes[3], 7),
-            z: (bytes[3] >> 4) & 0b111,
-            rcode: (bytes[3] & 0b1111),
-
-            qdcount: read_u16(&bytes[4..6]),
-            ancount: read_u16(&bytes[6..8]),
-            nscount: read_u16(&bytes[8..10]),
-            arcount: read_u16(&bytes[10..12]),
-        }
-    }
 }
 
 
@@ -296,13 +271,19 @@ fn foo() -> std::io::Result<()> {
 
     // read from the socket
     let mut buf2 = [0; 50];
-    let (amt, src) = socket.recv_from(&mut buf2)?;
+    let (amt, _) = socket.recv_from(&mut buf2)?;
 
     println!("Amt is {0}", amt);
     println!("Buf: {0}", String::from_utf8_lossy(&buf2));
 
-    let new_header = DnsHeader::from_bytes(&buf2);
-    println!("Header: {:?}", new_header);
+    let mut decoder = BinDecoder::new(&buf2);
+
+    let new_header = DnsHeader::decode(&mut decoder);
+    match new_header {
+        Ok(h) => println!("Header: {:?}", h),
+        Err(err) => println!("Decoding err: {}", err.msg),
+    }
+    
     
 Ok(())
 } // the socket is closed here
